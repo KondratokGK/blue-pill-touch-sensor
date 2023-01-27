@@ -1,0 +1,24 @@
+--cpu Cortex-M3
+"blue-pill-touch-sensor\startup_stm32f103xb.o"
+"blue-pill-touch-sensor\armlib_lock_glue.o"
+"blue-pill-touch-sensor\main.o"
+"blue-pill-touch-sensor\stm32f1xx_it.o"
+"blue-pill-touch-sensor\stm32f1xx_hal_msp.o"
+"blue-pill-touch-sensor\stm32f1xx_hal_gpio_ex.o"
+"blue-pill-touch-sensor\stm32f1xx_hal_tim.o"
+"blue-pill-touch-sensor\stm32f1xx_hal_tim_ex.o"
+"blue-pill-touch-sensor\stm32f1xx_hal.o"
+"blue-pill-touch-sensor\stm32f1xx_hal_rcc.o"
+"blue-pill-touch-sensor\stm32f1xx_hal_rcc_ex.o"
+"blue-pill-touch-sensor\stm32f1xx_hal_gpio.o"
+"blue-pill-touch-sensor\stm32f1xx_hal_dma.o"
+"blue-pill-touch-sensor\stm32f1xx_hal_cortex.o"
+"blue-pill-touch-sensor\stm32f1xx_hal_pwr.o"
+"blue-pill-touch-sensor\stm32f1xx_hal_flash.o"
+"blue-pill-touch-sensor\stm32f1xx_hal_flash_ex.o"
+"blue-pill-touch-sensor\stm32f1xx_hal_exti.o"
+"blue-pill-touch-sensor\system_stm32f1xx.o"
+--strict --scatter "blue-pill-touch-sensor\blue-pill-touch-sensor.sct"
+--summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
+--info sizes --info totals --info unused --info veneers
+--list "blue-pill-touch-sensor.map" -o blue-pill-touch-sensor\blue-pill-touch-sensor.axf
