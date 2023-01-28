@@ -57,8 +57,50 @@ static void MX_TIM4_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint16_t TouchBuff[1024];
-uint32_t foobar;
+
+//offset in % 
+#define TRIGGER_OFFSET 1
+#define TOUCH_BUFF_SIZE 256
+#define TOUCH_CAL_COUNT 64
+#define TOUCH_CAL_DELAY 0
+
+uint16_t TouchBuff[TOUCH_BUFF_SIZE];
+uint16_t TouchValueReal;
+uint16_t TouchValueMin = 0xFFFF;
+uint16_t TouchValueMax = 0x0000;
+uint16_t TouchValuePercent;
+uint16_t TouchTrigger = 0xFFFF;
+
+HAL_StatusTypeDef Debugger;
+_Bool TouchDataReadyFlag = 0;
+
+
+void DMA1_Channel1_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Channel1_IRQn 0 */
+	TouchDataReadyFlag = 1;
+  /* USER CODE END DMA1_Channel1_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_tim4_ch1);
+  /* USER CODE BEGIN DMA1_Channel1_IRQn 1 */
+
+  /* USER CODE END DMA1_Channel1_IRQn 1 */
+}
+
+HAL_StatusTypeDef TouchDataWait(uint32_t Timeout)
+{
+	//reset DMA flag
+	TouchDataReadyFlag = 0;
+	//wait for DMA flag
+	while(TouchDataReadyFlag!=1)
+	{
+		if(Timeout == 0) return HAL_ERROR;
+		HAL_Delay(1);
+		Timeout--;
+	}
+	return HAL_OK;
+}
+
+
 /* USER CODE END 0 */
 
 /**
@@ -92,11 +134,30 @@ int main(void)
   MX_DMA_Init();
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
-	//HAL_TIM_IC_Start_DMA(&htim4,TIM_CHANNEL_1,(uint32_t *) TouchBuff, 1024);
-	HAL_TIM_IC_Start(&htim4,TIM_CHANNEL_1);
+	HAL_TIM_IC_Start_DMA(&htim4,TIM_CHANNEL_1,(uint32_t *) TouchBuff, TOUCH_BUFF_SIZE);
+	//HAL_TIM_IC_Start(&htim4,TIM_CHANNEL_1);
 	HAL_TIM_PWM_Start(&htim4,TIM_CHANNEL_2);
-	TIM4->CCR2 = 0xF;
+	TIM4->CCR2 = 0x7F;
 	
+	//initial calibration
+	HAL_GPIO_WritePin(GPIOC,GPIO_PIN_13, GPIO_PIN_SET);
+	for(uint32_t n = 0; n<TOUCH_CAL_COUNT; n++)
+	{
+		int temp = 0;
+		//TODO: wait for DMA here
+		TouchDataWait(1000);
+		//TIM_DMACaptureHalfCplt
+		for(uint32_t i = 0; i<TOUCH_BUFF_SIZE; i++)
+		{
+			temp+=TouchBuff[i];
+		}
+		temp/=TOUCH_BUFF_SIZE;
+		TouchValueReal = temp;
+		if(TouchValueReal > TouchValueMax) TouchValueMax = TouchValueReal;
+		HAL_Delay(TOUCH_CAL_DELAY);
+	}		
+	
+	TouchTrigger = TouchValueMax + ((TouchValueMax*TRIGGER_OFFSET)/100);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -104,14 +165,18 @@ int main(void)
   while (1)
   {
     
+		//HAL_Delay(1000);
+		//TODO: wait for DMA here
+		TouchDataWait(1000);
 		int temp = 0;
-		for(int i = 0; i<1024; i++)
+		for(int i = 0; i<TOUCH_BUFF_SIZE; i++)
 		{
-			temp+=TIM4->CCR1;
-			temp/=2;
+			temp+=TouchBuff[i];
 		}
-		foobar = temp;
-		if(0xB00 > foobar)
+		temp/=TOUCH_BUFF_SIZE;
+		TouchValueReal = temp;
+		if(TouchValueReal > TouchValueMax) TouchValueMax = TouchValueReal;
+		if(TouchTrigger > TouchValueReal)
 		{
 			HAL_GPIO_WritePin(GPIOC,GPIO_PIN_13, GPIO_PIN_RESET);
 		}
@@ -119,7 +184,7 @@ int main(void)
 		{
 			HAL_GPIO_WritePin(GPIOC,GPIO_PIN_13, GPIO_PIN_SET);
 		}
-		/* USER CODE END WHILE */
+    /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
   }
@@ -182,6 +247,7 @@ static void MX_TIM4_Init(void)
   /* USER CODE END TIM4_Init 0 */
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_SlaveConfigTypeDef sSlaveConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
   TIM_IC_InitTypeDef sConfigIC = {0};
   TIM_OC_InitTypeDef sConfigOC = {0};
@@ -212,6 +278,14 @@ static void MX_TIM4_Init(void)
   {
     Error_Handler();
   }
+  sSlaveConfig.SlaveMode = TIM_SLAVEMODE_RESET;
+  sSlaveConfig.InputTrigger = TIM_TS_TI1FP1;
+  sSlaveConfig.TriggerPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+  sSlaveConfig.TriggerFilter = 0;
+  if (HAL_TIM_SlaveConfigSynchro(&htim4, &sSlaveConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_OC1REF;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
@@ -221,7 +295,7 @@ static void MX_TIM4_Init(void)
   sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
   sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
   sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
-  sConfigIC.ICFilter = 0;
+  sConfigIC.ICFilter = 2;
   if (HAL_TIM_IC_ConfigChannel(&htim4, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
